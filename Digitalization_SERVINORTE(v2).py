@@ -1991,13 +1991,10 @@ class UITabs:
                 reader = csv.DictReader(f)
                 for row in reader:
                     self.products_data.append(row)
-            print(f"✓ Loaded {len(self.products_data)} products")
         except FileNotFoundError:
-            print(f"⚠ Products file not found: {products_file}")
             messagebox.showwarning("Advertencia", 
                                   "No se encontró el archivo de productos. Se creará uno vacío.")
         except Exception as e:
-            print(f"❌ Error loading products: {e}")
             messagebox.showerror("Error", f"Error al cargar productos: {e}")
     
     def _on_search_change(self, *args):
@@ -2050,6 +2047,13 @@ class UITabs:
         self.product_stock_label.config(text=f"Disponibilidad: {p['stock']} unidades")
         self.product_price_label.config(text=f"Precio: ${p['precio']}")
     
+    def _find_cart_item_by_code(self, codigo):
+        """Find an item in the cart by product code"""
+        for item in self.cart_items:
+            if item['codigo'] == codigo:
+                return item
+        return None
+    
     def _add_to_cart(self):
         """Add selected product to cart"""
         if not self.selected_product:
@@ -2069,11 +2073,11 @@ class UITabs:
                 return
             
             # Check if product already in cart
-            for item in self.cart_items:
-                if item['codigo'] == self.selected_product['codigo']:
-                    item['cantidad'] += quantity
-                    self._update_cart_display()
-                    return
+            existing_item = self._find_cart_item_by_code(self.selected_product['codigo'])
+            if existing_item:
+                existing_item['cantidad'] += quantity
+                self._update_cart_display()
+                return
             
             # Add new item to cart
             price = float(self.selected_product['precio'])

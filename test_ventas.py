@@ -6,6 +6,7 @@ import unittest
 import os
 import sys
 import csv
+import datetime
 import tempfile
 from unittest.mock import Mock, patch, MagicMock
 
@@ -146,7 +147,7 @@ class TestVentasTabFunctionality(unittest.TestCase):
         ]
         
         client_code = 'CLIENT001'
-        fecha = '02-01-2026'
+        fecha = datetime.date.today().strftime('%d-%m-%Y')
         
         # Save order
         with open(self.ventas_file, 'w', newline='', encoding='utf-8') as f:
@@ -236,7 +237,7 @@ class TestVentasTabFunctionality(unittest.TestCase):
             writer = csv.writer(f, delimiter=';')
             writer.writerow(['fecha', 'cliente', 'codigo', 'producto', 'cantidad', 'precio', 'total'])
             
-            fecha = '02-01-2026'
+            fecha = datetime.date.today().strftime('%d-%m-%Y')
             for item in order1:
                 writer.writerow([fecha, client_code, item['codigo'], item['nombre'], 
                                item['cantidad'], item['precio'], item['cantidad'] * item['precio']])
