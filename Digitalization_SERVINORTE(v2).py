@@ -1839,9 +1839,353 @@ class UITabs:
     # ------PESTAÑA DE VENTAS--------------
     def _create_sales_tab(self):
         tab = self.tab_sales
-        label = tk.Label(tab, text="Hoja de Ventas - En desarrollo", 
-                        font="Arial, 20", fg="blue")
-        label.pack(pady=100)
+        
+        # Initialize sales-specific attributes
+        self.products_data = []
+        self.filtered_products = []
+        self.cart_items = []
+        self.selected_product = None
+        
+        # Load products from CSV
+        self._load_products()
+        
+        # Main frame with grid configuration
+        tab.columnconfigure(0, weight=1)
+        tab.columnconfigure(1, weight=2)
+        tab.rowconfigure(3, weight=1)
+        
+        # Title
+        title = ttk.Label(tab, text="Punto de Venta", font=("Arial", 20, "bold"))
+        title.grid(row=0, column=0, columnspan=2, pady=10)
+        
+        # Client section
+        client_frame = ttk.LabelFrame(tab, text="Código de Cliente", padding=10)
+        client_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+        
+        ttk.Label(client_frame, text="Cliente:").grid(row=0, column=0, padx=5)
+        self.client_code_entry = ttk.Entry(client_frame, width=20)
+        self.client_code_entry.grid(row=0, column=1, padx=5)
+        
+        # Search section
+        search_frame = ttk.LabelFrame(tab, text="Buscar Producto", padding=10)
+        search_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+        
+        ttk.Label(search_frame, text="Buscar por:").grid(row=0, column=0, padx=5)
+        self.search_var = tk.StringVar()
+        self.search_var.trace('w', self._on_search_change)
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
+        self.search_entry.grid(row=0, column=1, padx=5)
+        ttk.Label(search_frame, text="(código, nombre o categoría)", font=("Arial", 8)).grid(row=0, column=2, padx=5)
+        
+        # Left panel - Product list
+        left_frame = ttk.Frame(tab)
+        left_frame.grid(row=3, column=0, padx=10, pady=5, sticky="nsew")
+        
+        ttk.Label(left_frame, text="Productos Disponibles", font=("Arial", 12, "bold")).pack()
+        
+        # Product listbox with scrollbar
+        list_frame = ttk.Frame(left_frame)
+        list_frame.pack(fill="both", expand=True)
+        
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.product_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, height=15)
+        self.product_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.product_listbox.yview)
+        self.product_listbox.bind('<<ListboxSelect>>', self._on_product_select)
+        
+        # Product detail section (bottom left)
+        detail_frame = ttk.LabelFrame(left_frame, text="Detalle del Producto", padding=10)
+        detail_frame.pack(fill="x", pady=10)
+        
+        self.product_image_label = ttk.Label(detail_frame, text="[Imagen del Producto]", 
+                                            relief="solid", width=30)
+        self.product_image_label.grid(row=0, column=0, rowspan=4, padx=5, pady=5)
+        
+        self.product_desc_label = ttk.Label(detail_frame, text="Seleccione un producto", 
+                                           wraplength=200, justify="left")
+        self.product_desc_label.grid(row=0, column=1, sticky="w", padx=5)
+        
+        self.product_code_label = ttk.Label(detail_frame, text="", font=("Arial", 9, "bold"))
+        self.product_code_label.grid(row=1, column=1, sticky="w", padx=5)
+        
+        self.product_stock_label = ttk.Label(detail_frame, text="")
+        self.product_stock_label.grid(row=2, column=1, sticky="w", padx=5)
+        
+        self.product_price_label = ttk.Label(detail_frame, text="", font=("Arial", 10, "bold"))
+        self.product_price_label.grid(row=3, column=1, sticky="w", padx=5)
+        
+        # Add to cart section
+        add_frame = ttk.Frame(detail_frame)
+        add_frame.grid(row=4, column=0, columnspan=2, pady=10)
+        
+        ttk.Label(add_frame, text="Cantidad:").pack(side="left", padx=5)
+        self.quantity_spinbox = ttk.Spinbox(add_frame, from_=1, to=100, width=5)
+        self.quantity_spinbox.set(1)
+        self.quantity_spinbox.pack(side="left", padx=5)
+        
+        self.add_to_cart_btn = ttk.Button(add_frame, text="Agregar al Carrito", 
+                                         command=self._add_to_cart)
+        self.add_to_cart_btn.pack(side="left", padx=5)
+        
+        # Right panel - Shopping cart
+        right_frame = ttk.Frame(tab)
+        right_frame.grid(row=3, column=1, padx=10, pady=5, sticky="nsew")
+        
+        ttk.Label(right_frame, text="Carrito de Compras", font=("Arial", 12, "bold")).pack()
+        
+        # Cart treeview with scrollbar
+        cart_frame = ttk.Frame(right_frame)
+        cart_frame.pack(fill="both", expand=True)
+        
+        cart_scrollbar = ttk.Scrollbar(cart_frame)
+        cart_scrollbar.pack(side="right", fill="y")
+        
+        self.cart_tree = ttk.Treeview(cart_frame, columns=("Producto", "Cantidad", "Precio", "Total"),
+                                     show="headings", yscrollcommand=cart_scrollbar.set, height=15)
+        self.cart_tree.heading("Producto", text="Producto")
+        self.cart_tree.heading("Cantidad", text="Cant.")
+        self.cart_tree.heading("Precio", text="Precio")
+        self.cart_tree.heading("Total", text="Total")
+        
+        self.cart_tree.column("Producto", width=200)
+        self.cart_tree.column("Cantidad", width=60)
+        self.cart_tree.column("Precio", width=80)
+        self.cart_tree.column("Total", width=80)
+        
+        self.cart_tree.pack(side="left", fill="both", expand=True)
+        cart_scrollbar.config(command=self.cart_tree.yview)
+        
+        # Cart buttons
+        cart_buttons = ttk.Frame(right_frame)
+        cart_buttons.pack(fill="x", pady=5)
+        
+        ttk.Button(cart_buttons, text="Eliminar Seleccionado", 
+                  command=self._remove_from_cart).pack(side="left", padx=5)
+        ttk.Button(cart_buttons, text="Limpiar Carrito", 
+                  command=self._clear_cart).pack(side="left", padx=5)
+        
+        # Total section
+        total_frame = ttk.Frame(right_frame)
+        total_frame.pack(fill="x", pady=10)
+        
+        ttk.Label(total_frame, text="TOTAL:", font=("Arial", 14, "bold")).pack(side="left", padx=5)
+        self.total_label = ttk.Label(total_frame, text="$0.00", font=("Arial", 14, "bold"))
+        self.total_label.pack(side="left", padx=5)
+        
+        # Finalize order button
+        ttk.Button(right_frame, text="Finalizar Compra", command=self._finalize_order,
+                  style="Accent.TButton").pack(pady=10)
+        
+        # Initialize product list
+        self._update_product_list()
+    
+    def _load_products(self):
+        """Load products from CSV file"""
+        products_file = os.path.join(os.getcwd(), "productos.csv")
+        self.products_data = []
+        
+        try:
+            with open(products_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    self.products_data.append(row)
+        except FileNotFoundError:
+            messagebox.showwarning("Advertencia", 
+                                  "No se encontró el archivo de productos. Se creará uno vacío.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar productos: {e}")
+    
+    def _on_search_change(self, *args):
+        """Handle search field changes"""
+        search_text = self.search_var.get().lower()
+        
+        if not search_text:
+            self.filtered_products = self.products_data[:]
+        else:
+            self.filtered_products = [
+                p for p in self.products_data
+                if search_text in p['codigo'].lower() or
+                   search_text in p['nombre'].lower() or
+                   search_text in p['categoria'].lower()
+            ]
+        
+        self._update_product_list()
+    
+    def _update_product_list(self):
+        """Update the product listbox"""
+        self.product_listbox.delete(0, tk.END)
+        
+        products = self.filtered_products if hasattr(self, 'filtered_products') and self.filtered_products else self.products_data
+        
+        for product in products:
+            display_text = f"{product['codigo']} - {product['nombre']} (${product['precio']}) - Stock: {product['stock']}"
+            self.product_listbox.insert(tk.END, display_text)
+    
+    def _on_product_select(self, event):
+        """Handle product selection"""
+        selection = self.product_listbox.curselection()
+        if not selection:
+            return
+        
+        index = selection[0]
+        products = self.filtered_products if hasattr(self, 'filtered_products') and self.filtered_products else self.products_data
+        
+        if index < len(products):
+            self.selected_product = products[index]
+            self._update_product_details()
+    
+    def _update_product_details(self):
+        """Update product detail display"""
+        if not self.selected_product:
+            return
+        
+        p = self.selected_product
+        self.product_desc_label.config(text=f"{p['nombre']}\n{p['descripcion']}")
+        self.product_code_label.config(text=f"Código: {p['codigo']}")
+        self.product_stock_label.config(text=f"Disponibilidad: {p['stock']} unidades")
+        self.product_price_label.config(text=f"Precio: ${p['precio']}")
+    
+    def _find_cart_item_by_code(self, codigo):
+        """Find an item in the cart by product code"""
+        for item in self.cart_items:
+            if item['codigo'] == codigo:
+                return item
+        return None
+    
+    def _add_to_cart(self):
+        """Add selected product to cart"""
+        if not self.selected_product:
+            messagebox.showwarning("Advertencia", "Por favor seleccione un producto")
+            return
+        
+        try:
+            quantity = int(self.quantity_spinbox.get())
+            if quantity <= 0:
+                messagebox.showwarning("Advertencia", "La cantidad debe ser mayor a 0")
+                return
+            
+            stock = int(self.selected_product['stock'])
+            if quantity > stock:
+                messagebox.showwarning("Advertencia", 
+                                      f"Stock insuficiente. Disponible: {stock}")
+                return
+            
+            # Check if product already in cart
+            existing_item = self._find_cart_item_by_code(self.selected_product['codigo'])
+            if existing_item:
+                existing_item['cantidad'] += quantity
+                self._update_cart_display()
+                return
+            
+            # Add new item to cart
+            price = float(self.selected_product['precio'])
+            self.cart_items.append({
+                'codigo': self.selected_product['codigo'],
+                'nombre': self.selected_product['nombre'],
+                'cantidad': quantity,
+                'precio': price
+            })
+            
+            self._update_cart_display()
+            messagebox.showinfo("Éxito", "Producto agregado al carrito")
+            
+        except ValueError as e:
+            messagebox.showerror("Error", "Cantidad inválida")
+    
+    def _update_cart_display(self):
+        """Update cart treeview"""
+        # Clear current display
+        for item in self.cart_tree.get_children():
+            self.cart_tree.delete(item)
+        
+        # Add items
+        total = 0
+        for item in self.cart_items:
+            item_total = item['cantidad'] * item['precio']
+            total += item_total
+            self.cart_tree.insert('', 'end', values=(
+                item['nombre'],
+                item['cantidad'],
+                f"${item['precio']:.2f}",
+                f"${item_total:.2f}"
+            ))
+        
+        # Update total
+        self.total_label.config(text=f"${total:.2f}")
+    
+    def _remove_from_cart(self):
+        """Remove selected item from cart"""
+        selection = self.cart_tree.selection()
+        if not selection:
+            messagebox.showwarning("Advertencia", "Seleccione un producto para eliminar")
+            return
+        
+        # Get selected item index
+        item = selection[0]
+        index = self.cart_tree.index(item)
+        
+        # Remove from cart
+        del self.cart_items[index]
+        self._update_cart_display()
+    
+    def _clear_cart(self):
+        """Clear all items from cart"""
+        if self.cart_items:
+            if messagebox.askyesno("Confirmar", "¿Desea limpiar el carrito?"):
+                self.cart_items = []
+                self._update_cart_display()
+    
+    def _finalize_order(self):
+        """Finalize the purchase order"""
+        if not self.cart_items:
+            messagebox.showwarning("Advertencia", "El carrito está vacío")
+            return
+        
+        client_code = self.client_code_entry.get().strip()
+        if not client_code:
+            messagebox.showwarning("Advertencia", "Por favor ingrese el código de cliente")
+            return
+        
+        # Calculate total
+        total = sum(item['cantidad'] * item['precio'] for item in self.cart_items)
+        
+        # Save order to CSV
+        order_file = os.path.join(os.getcwd(), "ventas.csv")
+        file_exists = os.path.exists(order_file)
+        
+        try:
+            with open(order_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f, delimiter=';')
+                
+                # Write header if new file
+                if not file_exists:
+                    writer.writerow(['fecha', 'cliente', 'codigo', 'producto', 'cantidad', 'precio', 'total'])
+                
+                # Write each item
+                fecha = datetime.date.today().strftime("%d-%m-%Y")
+                for item in self.cart_items:
+                    writer.writerow([
+                        fecha,
+                        client_code,
+                        item['codigo'],
+                        item['nombre'],
+                        item['cantidad'],
+                        item['precio'],
+                        item['cantidad'] * item['precio']
+                    ])
+            
+            messagebox.showinfo("Éxito", 
+                              f"Orden finalizada\nCliente: {client_code}\nTotal: ${total:.2f}")
+            
+            # Clear cart and client code
+            self.cart_items = []
+            self.client_code_entry.delete(0, tk.END)
+            self._update_cart_display()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al guardar la orden: {e}")
     
     # -----PESTAÑA DE REGISTROS------------
     def _create_registro_tab(self):
